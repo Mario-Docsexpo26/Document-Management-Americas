@@ -17,8 +17,27 @@ const path = require('path');
 const XLSX = require('xlsx');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
-const EXCEL_PATH = path.join(REPO_ROOT, 'data', 'bitacora.xlsx');
+const DATA_DIR = path.join(REPO_ROOT, 'data');
 const HTML_PATH = path.join(REPO_ROOT, 'index.html');
+
+// Finds the Excel to process automatically, instead of requiring a fixed filename — Mario can
+// drop the Bitácora into data/ with whatever name it already has (no renaming step needed).
+// If there's more than one .xlsx sitting in data/ (e.g. an old one wasn't cleaned up), picks the
+// most recently modified one, so a fresh upload always wins even if an older file is still there.
+function findLatestExcel() {
+  if (!fs.existsSync(DATA_DIR)) return null;
+  const candidates = fs.readdirSync(DATA_DIR)
+    .filter(name => /\.xlsx$/i.test(name))
+    .map(name => {
+      const p = path.join(DATA_DIR, name);
+      return { path: p, mtime: fs.statSync(p).mtimeMs };
+    });
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => b.mtime - a.mtime);
+  return candidates[0].path;
+}
+
+const EXCEL_PATH = findLatestExcel();
 
 // ---------------- same constants as index.html ----------------
 const COL = {
@@ -216,10 +235,11 @@ function normalizeVesselNames(data) {
 
 // ---------------- main ----------------
 function main() {
-  if (!fs.existsSync(EXCEL_PATH)) {
-    console.error(`No se encontró ${EXCEL_PATH}. Sube la Bitácora como data/bitacora.xlsx antes de correr esto.`);
+  if (!EXCEL_PATH) {
+    console.error(`No se encontró ningún archivo .xlsx dentro de ${DATA_DIR}. Sube la Bitácora ahí (con el nombre que sea) antes de correr esto.`);
     process.exit(1);
   }
+  console.log(`Usando: ${EXCEL_PATH}`);
   const buf = fs.readFileSync(EXCEL_PATH);
   const wb = XLSX.read(buf, { type: 'buffer', cellDates: true });
 
